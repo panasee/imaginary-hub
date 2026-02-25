@@ -87,13 +87,17 @@ def rank_universe(features_df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     # Higher is better: momentum/quality/growth ; Lower is better: valuation/risk
+    pe = pd.to_numeric(df.get("pe"), errors="coerce")
+    pb = pd.to_numeric(df.get("pb"), errors="coerce")
+    vol_20 = pd.to_numeric(df.get("vol_20"), errors="coerce")
+
     components = {
-        "mom": df["ret_60"],
-        "quality": df["roe"],
-        "growth": df["revenue_growth"],
-        "value_pe": -df["pe"],
-        "value_pb": -df["pb"],
-        "risk": -df["vol_20"],
+        "mom": pd.to_numeric(df.get("ret_60"), errors="coerce"),
+        "quality": pd.to_numeric(df.get("roe"), errors="coerce"),
+        "growth": pd.to_numeric(df.get("revenue_growth"), errors="coerce"),
+        "value_pe": -pe,
+        "value_pb": -pb,
+        "risk": -vol_20,
     }
 
     score_cols = []
