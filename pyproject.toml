@@ -13,10 +13,12 @@ dependencies = [
   "numpy>=1.24",
   "plotly>=5.0",
   "dash>=2.0",
+  "streamlit>=1.30",
 ]
 
 [project.scripts]
 imaginary-hub-tv = "imaginary_hub.apps.tv_like_app:main"
+imaginary-hub-tv-streamlit = "imaginary_hub.apps.tv_like_streamlit:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

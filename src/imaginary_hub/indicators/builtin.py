@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .base import register_indicator, registry
+from .base import IndicatorParam, register_indicator, registry
 
 
 def _ensure_close(df: pd.DataFrame) -> pd.Series:
@@ -69,12 +69,49 @@ def macd(df: pd.DataFrame, params: dict) -> pd.DataFrame:
 def register_builtins() -> None:
     existing = set(registry.names())
     specs = [
-        ("MA", "overlay", {"window": 20}, ma),
-        ("EMA", "overlay", {"window": 20}, ema),
-        ("Bollinger", "overlay", {"window": 20, "num_std": 2.0}, bollinger),
-        ("RSI", "oscillator", {"window": 14}, rsi),
-        ("MACD", "oscillator", {"fast": 12, "slow": 26, "signal": 9}, macd),
+        (
+            "MA",
+            "overlay",
+            {"window": 20},
+            [IndicatorParam(key="window", label="Window", type="int", default=20, min=1, max=400, step=1)],
+            ma,
+        ),
+        (
+            "EMA",
+            "overlay",
+            {"window": 20},
+            [IndicatorParam(key="window", label="Window", type="int", default=20, min=1, max=400, step=1)],
+            ema,
+        ),
+        (
+            "Bollinger",
+            "overlay",
+            {"window": 20, "num_std": 2.0},
+            [
+                IndicatorParam(key="window", label="Window", type="int", default=20, min=1, max=400, step=1),
+                IndicatorParam(key="num_std", label="Std Dev", type="float", default=2.0, min=0.1, max=10.0, step=0.1),
+            ],
+            bollinger,
+        ),
+        (
+            "RSI",
+            "oscillator",
+            {"window": 14},
+            [IndicatorParam(key="window", label="Window", type="int", default=14, min=1, max=200, step=1)],
+            rsi,
+        ),
+        (
+            "MACD",
+            "oscillator",
+            {"fast": 12, "slow": 26, "signal": 9},
+            [
+                IndicatorParam(key="fast", label="Fast", type="int", default=12, min=1, max=200, step=1),
+                IndicatorParam(key="slow", label="Slow", type="int", default=26, min=2, max=400, step=1),
+                IndicatorParam(key="signal", label="Signal", type="int", default=9, min=1, max=200, step=1),
+            ],
+            macd,
+        ),
     ]
-    for name, panel, default_params, fn in specs:
+    for name, panel, default_params, params_schema, fn in specs:
         if name not in existing:
-            register_indicator(name, panel, default_params, fn)
+            register_indicator(name, panel, default_params, fn, params_schema=params_schema)
