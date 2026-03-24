@@ -6,17 +6,38 @@ from typing import Any
 import pandas as pd
 
 
-UI_TO_PROVIDER_INTERVAL = {
+INTERNAL_PRICE_PROVIDER = "yfinance"
+SUPPORTED_INTERVALS = ["15min", "30min", "1h", "2h", "4h", "1d", "1w", "1m"]
+MAX_LOOKBACK_DAYS = {
+    "15min": 30,
+    "30min": 30,
+    "1h": 730,
+    "2h": 730,
+    "4h": 730,
+    "1d": 3650,
+    "1w": 3650,
+    "1m": 3650,
+}
+UI_TO_BASE_INTERVAL = {
     "15min": "15m",
     "30min": "30m",
     "1h": "60m",
-    "2h": "120m",
-    "4h": "240m",
+    "2h": "60m",
+    "4h": "60m",
     "1d": "1d",
-    "1w": "1wk",
-    "1m": "1mo",
+    "1w": "1d",
+    "1m": "1d",
 }
-
+RESAMPLE_RULES = {
+    "15min": None,
+    "30min": None,
+    "1h": None,
+    "2h": "2h",
+    "4h": "4h",
+    "1d": None,
+    "1w": "1W",
+    "1m": "MS",
+}
 
 PRICE_ALIASES = {
     "open": ["open", "Open"],
@@ -71,27 +92,72 @@ def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 
     out = out[["open", "high", "low", "close", "volume"]]
     out = out[~out.index.duplicated(keep="last")]
-    return out.dropna(subset=["close"])
+    out.index = pd.to_datetime(out.index, errors="coerce")
+    out = out[~out.index.isna()]
+    return out.dropna(subset=["close"]) 
 
 
-def map_interval(interval: str, provider: str) -> str:
-    normalized = interval.strip().lower()
-    mapped = UI_TO_PROVIDER_INTERVAL.get(normalized, normalized)
+def _resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    if df.empty:
+        return df
 
-    if provider == "akshare":
-        akshare_map = {
-            "15m": "15m",
-            "30m": "30m",
-            "60m": "60m",
-            "120m": "120m",
-            "240m": "240m",
-            "1d": "1d",
-            "1wk": "1w",
-            "1mo": "1m",
-        }
-        return akshare_map.get(mapped, mapped)
+    work = df.copy().sort_index()
+    agg_map = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }
+    label = "left" if rule in {"1W", "MS"} else "right"
+    closed = "left" if rule in {"1W", "MS"} else "right"
+    resampled = work.resample(rule, label=label, closed=closed).agg(agg_map)
+    resampled = resampled.dropna(subset=["open", "high", "low", "close"])
+    return resampled
 
-    return mapped
+
+def _maybe_trim_partial_period(df: pd.DataFrame, interval: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+    if interval not in {"1w", "1m"}:
+        return df
+
+    now = pd.Timestamp.now(tz=df.index.tz) if df.index.tz is not None else pd.Timestamp.now()
+    last_ts = df.index.max()
+    if pd.isna(last_ts):
+        return df
+
+    if interval == "1w":
+        current_period = now.to_period("W")
+        last_period = last_ts.to_period("W")
+    else:
+        current_period = now.to_period("M")
+        last_period = last_ts.to_period("M")
+
+    if last_period == current_period and len(df) > 1:
+        return df.iloc[:-1]
+    return df
+
+
+def resolve_fetch_plan(interval: str) -> tuple[str, str | None]:
+    normalized = interval.strip()
+    if normalized not in SUPPORTED_INTERVALS:
+        raise ValueError(f"Unsupported interval: {interval}")
+    return UI_TO_BASE_INTERVAL[normalized], RESAMPLE_RULES[normalized]
+
+
+def clamp_date_range(start_date: str, end_date: str, interval: str) -> tuple[str, str]:
+    start_ts = pd.to_datetime(start_date, errors="coerce")
+    end_ts = pd.to_datetime(end_date, errors="coerce")
+    if pd.isna(end_ts):
+        end_ts = pd.Timestamp.now().normalize()
+    if pd.isna(start_ts):
+        start_ts = end_ts - pd.Timedelta(days=365)
+
+    max_days = MAX_LOOKBACK_DAYS.get(interval, 3650)
+    min_start = end_ts - pd.Timedelta(days=max_days)
+    effective_start = max(start_ts, min_start)
+    return effective_start.strftime("%Y-%m-%d"), end_ts.strftime("%Y-%m-%d")
 
 
 def fetch_price_df(
@@ -99,21 +165,33 @@ def fetch_price_df(
     start_date: str,
     end_date: str,
     interval: str = "1d",
-    provider: str = "akshare",
+    provider: str | None = None,
 ) -> pd.DataFrame:
     from omnifinan.unified_api import get_price_df
 
-    provider_interval = map_interval(interval, provider)
+    actual_provider = provider or INTERNAL_PRICE_PROVIDER
+    base_interval, resample_rule = resolve_fetch_plan(interval)
+    effective_start_date, effective_end_date = clamp_date_range(start_date, end_date, interval)
+
     df = get_price_df(
         ticker=ticker,
-        start_date=start_date,
-        end_date=end_date,
-        interval=provider_interval,
-        provider=provider,
+        start_date=effective_start_date,
+        end_date=effective_end_date,
+        interval=base_interval,
+        provider=actual_provider,
     )
     if not isinstance(df, pd.DataFrame):
         return pd.DataFrame()
-    return normalize_ohlcv(df)
+
+    normalized = normalize_ohlcv(df)
+    if normalized.empty:
+        return normalized
+
+    if resample_rule:
+        normalized = _resample_ohlcv(normalized, resample_rule)
+        normalized = _maybe_trim_partial_period(normalized, interval)
+
+    return normalized
 
 
 def fetch_financial_metrics(

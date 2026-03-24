@@ -12,7 +12,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from imaginary_hub.charts.omnifinan_stock_figure import build_stock_figure
-from imaginary_hub.data.omnifinan_adapter import fetch_price_df
+from imaginary_hub.data.omnifinan_adapter import (
+    INTERNAL_PRICE_PROVIDER,
+    SUPPORTED_INTERVALS,
+    fetch_price_df,
+)
 from imaginary_hub.indicators.base import IndicatorParam, registry
 from imaginary_hub.indicators.builtin import register_builtins
 
@@ -22,13 +26,13 @@ register_builtins()
 
 
 @st.cache_data(show_spinner=False)
-def load_price_df(ticker: str, start_date: str, end_date: str, interval: str, provider: str) -> pd.DataFrame:
+def load_price_df(ticker: str, start_date: str, end_date: str, interval: str) -> pd.DataFrame:
     return fetch_price_df(
         ticker=ticker,
         start_date=start_date,
         end_date=end_date,
         interval=interval,
-        provider=provider,
+        provider=INTERNAL_PRICE_PROVIDER,
     )
 
 
@@ -63,6 +67,7 @@ def render_param_widget(indicator_name: str, param: IndicatorParam, current_valu
     return st.text_input(param.label, value=str(current_value), key=key, help=param.help)
 
 
+
 def build_indicator_params(selected: list[str]) -> dict[str, dict]:
     params_map: dict[str, dict] = {}
     for name in selected:
@@ -77,21 +82,36 @@ def build_indicator_params(selected: list[str]) -> dict[str, dict]:
     return params_map
 
 
+
+def compute_freshness_label(df: pd.DataFrame) -> tuple[str, str]:
+    if df.empty:
+        return "N/A", "No data"
+
+    last_ts = pd.to_datetime(df.index.max(), errors="coerce")
+    if pd.isna(last_ts):
+        return "N/A", "Unknown"
+
+    now = pd.Timestamp.now(tz=last_ts.tz) if getattr(last_ts, "tz", None) is not None else pd.Timestamp.now()
+    age_minutes = max(0.0, (now - last_ts).total_seconds() / 60.0)
+    freshness = f"{age_minutes:.1f} min"
+    status = "Fresh" if age_minutes <= 30 else "Delayed/Stale"
+    return freshness, status
+
+
+
 def main() -> None:
     st.title("Imaginary Hub · OmniFinan TV-like Workstation")
-    st.caption("Rendering now uses OmniFinan StockFigure first, with Streamlit only as the GUI shell.")
+    st.caption(
+        f"Rendering uses OmniFinan StockFigure. Price source is internally fixed to {INTERNAL_PRICE_PROVIDER} for better intraday coverage."
+    )
 
     with st.sidebar:
         st.subheader("Market")
         ticker = st.text_input("Ticker", value="AAPL").strip().upper()
-        provider = st.selectbox("Provider", options=["yfinance", "akshare", "finnhub"], index=0)
-        interval = st.selectbox(
-            "Interval",
-            options=["15min", "30min", "1h", "2h", "4h", "1d", "1w", "1m"],
-            index=5,
-        )
+        interval = st.selectbox("Interval", options=SUPPORTED_INTERVALS, index=5)
         start_date = st.date_input("Start Date", value=date.today() - timedelta(days=365))
         end_date = st.date_input("End Date", value=date.today())
+        st.caption(f"Price provider: {INTERNAL_PRICE_PROVIDER} (built-in)")
 
         st.subheader("Indicators")
         indicator_names = registry.names()
@@ -113,7 +133,6 @@ def main() -> None:
             start_date=start_date.isoformat(),
             end_date=end_date.isoformat(),
             interval=interval,
-            provider=provider,
         )
 
     if df.empty:
@@ -123,16 +142,19 @@ def main() -> None:
     fig, enriched = build_stock_figure(
         df=df,
         ticker=ticker,
-        provider=provider,
+        provider=INTERNAL_PRICE_PROVIDER,
         selected_indicators=selected,
         custom_params=custom_params,
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    freshness, freshness_status = compute_freshness_label(enriched)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Ticker", ticker)
     c2.metric("Bars", len(enriched))
     c3.metric("Last Close", f"{enriched['close'].iloc[-1]:.2f}")
-    c4.metric("Date Range", f"{enriched.index.min().date()} → {enriched.index.max().date()}")
+    c4.metric("Interval", interval)
+    c5.metric("Last Bar Time", str(enriched.index.max()))
+    c6.metric("Freshness", freshness, freshness_status)
 
     st.plotly_chart(fig, use_container_width=True)
 
