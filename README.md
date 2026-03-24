@@ -18,12 +18,12 @@ A practical executable quant stock-selection and trading analysis program built 
 
 ### 2. TV-like GUI framework
 
-A **TradingView-inspired local dashboard** built around **Streamlit + Plotly** with **OmniFinan** as the backend.
+A **TradingView-inspired local dashboard** built around **Streamlit** as GUI shell, with **OmniFinan StockFigure** as the preferred chart engine and **OmniFinan** as the backend.
 
 Features:
 - input **ticker**
 - select **provider / interval / date range**
-- render **candlestick + volume**
+- render **candlestick + volume** via **OmniFinan `StockFigure`**
 - render built-in indicators:
   - **MA**
   - **EMA**
@@ -43,12 +43,13 @@ A Dash version is still kept as a backup entry point, but the **Streamlit app is
 - **`src/imaginary_hub/data/omnifinan_adapter.py`**: OmniFinan OHLCV adapter + normalization
 - **`src/imaginary_hub/indicators/base.py`**: indicator registry + parameter schema contract
 - **`src/imaginary_hub/indicators/builtin.py`**: built-in example indicators
-- **`src/imaginary_hub/charts/plotly_tv.py`**: Plotly multi-panel chart builder
+- **`src/imaginary_hub/charts/omnifinan_stock_figure.py`**: OmniFinan `StockFigure` adapter for GUI rendering
+- **`src/imaginary_hub/charts/plotly_tv.py`**: legacy fallback renderer, no longer the preferred path
 - **`src/imaginary_hub/config/theme.py`**: TradingView-like dark palette
 
 ## Indicator design
 
-The indicator system is now **schema-driven**, so the GUI does not hardcode MA/RSI/MACD-specific inputs.
+The indicator system is now **schema-driven**, so the GUI does not hardcode MA/RSI/MACD-specific inputs, while the actual chart rendering is delegated to **OmniFinan `StockFigure`**.
 
 Each indicator can declare:
 - **name**
@@ -132,7 +133,7 @@ register_indicator(
 )
 ```
 
-The Streamlit sidebar will render parameter widgets from the schema.
+The Streamlit sidebar will render parameter widgets from the schema, and the selected outputs are then drawn through the OmniFinan chart object.
 
 ## Notes / limitations
 

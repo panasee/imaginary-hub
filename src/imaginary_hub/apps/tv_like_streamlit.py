@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from imaginary_hub.charts.plotly_tv import build_figure
+from imaginary_hub.charts.omnifinan_stock_figure import build_stock_figure
 from imaginary_hub.data.omnifinan_adapter import fetch_price_df
 from imaginary_hub.indicators.base import IndicatorParam, registry
 from imaginary_hub.indicators.builtin import register_builtins
@@ -79,6 +79,7 @@ def build_indicator_params(selected: list[str]) -> dict[str, dict]:
 
 def main() -> None:
     st.title("Imaginary Hub · OmniFinan TV-like Workstation")
+    st.caption("Rendering now uses OmniFinan StockFigure first, with Streamlit only as the GUI shell.")
 
     with st.sidebar:
         st.subheader("Market")
@@ -115,7 +116,13 @@ def main() -> None:
         st.error(f"No data returned for {ticker}.")
         st.stop()
 
-    enriched = registry.apply(df, selected, custom_params=custom_params)
+    fig, enriched = build_stock_figure(
+        df=df,
+        ticker=ticker,
+        provider=provider,
+        selected_indicators=selected,
+        custom_params=custom_params,
+    )
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Ticker", ticker)
@@ -123,7 +130,6 @@ def main() -> None:
     c3.metric("Last Close", f"{enriched['close'].iloc[-1]:.2f}")
     c4.metric("Date Range", f"{enriched.index.min().date()} → {enriched.index.max().date()}")
 
-    fig = build_figure(enriched, ticker=ticker, selected_indicators=selected)
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("Data Preview", expanded=False):
