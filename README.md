@@ -22,7 +22,8 @@ A **TradingView-inspired local dashboard** built around **Streamlit** as GUI she
 
 Features:
 - input **ticker**
-- select **provider / interval / date range**
+- select **interval / date range / price-axis scale**
+- use built-in **yfinance** as the internal price source
 - render **candlestick + volume** via **OmniFinan `StockFigure`**
 - render built-in indicators:
   - **MA**
@@ -174,6 +175,9 @@ The Streamlit sidebar will render parameter widgets from the schema, and the sel
 
 - This is a **framework shell**, not a pixel-perfect TradingView clone.
 - It is optimized for a **research workstation** flow, not ultra-low-latency real-time charting.
+- The GUI now uses a built-in **yfinance-only** price path internally; provider switching is intentionally hidden from the UI.
+- **2h / 4h / 1w / 1m** are built from local resampling of lower/base intervals.
+- **Log** price scale is applied only to the main price axis; if price data contains **<= 0**, the app warns and falls back to **linear**.
 - Built-in indicators are best treated as **examples/bootstrap defaults**, not the long-term center of the system.
 - The next natural step is letting users register and manage fully custom indicators more directly.
 

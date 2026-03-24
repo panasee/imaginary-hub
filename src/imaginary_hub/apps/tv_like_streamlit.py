@@ -109,6 +109,7 @@ def main() -> None:
         st.subheader("Market")
         ticker = st.text_input("Ticker", value="AAPL").strip().upper()
         interval = st.selectbox("Interval", options=SUPPORTED_INTERVALS, index=5)
+        price_axis_scale = st.selectbox("Price Axis Scale", options=["linear", "log"], index=0)
         start_date = st.date_input("Start Date", value=date.today() - timedelta(days=365))
         end_date = st.date_input("End Date", value=date.today())
         st.caption(f"Price provider: {INTERNAL_PRICE_PROVIDER} (built-in)")
@@ -139,12 +140,20 @@ def main() -> None:
         st.error(f"No data returned for {ticker}.")
         st.stop()
 
+    effective_price_axis_scale = price_axis_scale
+    if price_axis_scale == "log":
+        price_values = pd.to_numeric(df["close"], errors="coerce") if "close" in df.columns else pd.Series(dtype=float)
+        if price_values.empty or (price_values <= 0).any():
+            st.warning("Log scale requires all main price values to be > 0. Falling back to linear scale.")
+            effective_price_axis_scale = "linear"
+
     fig, enriched = build_stock_figure(
         df=df,
         ticker=ticker,
         provider=INTERNAL_PRICE_PROVIDER,
         selected_indicators=selected,
         custom_params=custom_params,
+        price_axis_scale=effective_price_axis_scale,
     )
 
     freshness, freshness_status = compute_freshness_label(enriched)

@@ -137,6 +137,7 @@ def build_stock_figure(
     provider: str,
     selected_indicators: list[str] | None = None,
     custom_params: dict[str, dict] | None = None,
+    price_axis_scale: str = "linear",
     width: int = 1400,
     height: int = 1000,
 ) -> tuple[Any, pd.DataFrame]:
@@ -172,4 +173,5 @@ def build_stock_figure(
             oscillator_row += 1
 
     sf.fig.update_layout(title=f"{ticker} · OmniFinan StockFigure")
+    sf.fig.layout.yaxis.type = price_axis_scale
     return sf.fig, enriched
