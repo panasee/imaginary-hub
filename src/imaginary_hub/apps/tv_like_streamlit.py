@@ -85,7 +85,11 @@ def main() -> None:
         st.subheader("Market")
         ticker = st.text_input("Ticker", value="AAPL").strip().upper()
         provider = st.selectbox("Provider", options=["yfinance", "akshare", "finnhub"], index=0)
-        interval = st.selectbox("Interval", options=["1d", "1wk", "1mo"], index=0)
+        interval = st.selectbox(
+            "Interval",
+            options=["15min", "30min", "1h", "2h", "4h", "1d", "1w", "1m"],
+            index=5,
+        )
         start_date = st.date_input("Start Date", value=date.today() - timedelta(days=365))
         end_date = st.date_input("End Date", value=date.today())
 

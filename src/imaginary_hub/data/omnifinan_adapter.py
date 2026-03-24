@@ -6,6 +6,18 @@ from typing import Any
 import pandas as pd
 
 
+UI_TO_PROVIDER_INTERVAL = {
+    "15min": "15m",
+    "30min": "30m",
+    "1h": "60m",
+    "2h": "120m",
+    "4h": "240m",
+    "1d": "1d",
+    "1w": "1wk",
+    "1m": "1mo",
+}
+
+
 PRICE_ALIASES = {
     "open": ["open", "Open"],
     "high": ["high", "High"],
@@ -62,6 +74,26 @@ def normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return out.dropna(subset=["close"])
 
 
+def map_interval(interval: str, provider: str) -> str:
+    normalized = interval.strip().lower()
+    mapped = UI_TO_PROVIDER_INTERVAL.get(normalized, normalized)
+
+    if provider == "akshare":
+        akshare_map = {
+            "15m": "15m",
+            "30m": "30m",
+            "60m": "60m",
+            "120m": "120m",
+            "240m": "240m",
+            "1d": "1d",
+            "1wk": "1w",
+            "1mo": "1m",
+        }
+        return akshare_map.get(mapped, mapped)
+
+    return mapped
+
+
 def fetch_price_df(
     ticker: str,
     start_date: str,
@@ -71,11 +103,12 @@ def fetch_price_df(
 ) -> pd.DataFrame:
     from omnifinan.unified_api import get_price_df
 
+    provider_interval = map_interval(interval, provider)
     df = get_price_df(
         ticker=ticker,
         start_date=start_date,
         end_date=end_date,
-        interval=interval,
+        interval=provider_interval,
         provider=provider,
     )
     if not isinstance(df, pd.DataFrame):
