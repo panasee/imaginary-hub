@@ -57,8 +57,15 @@ Each indicator can declare:
 - **default params**
 - **parameter schema**
 - **calculation function**
+- **trace schema**
 
-This makes it straightforward to replace built-in indicators with your own research indicators later.
+So the extension contract is now:
+
+```text
+indicator = compute schema + UI schema + trace schema
+```
+
+That means a new indicator no longer requires editing the chart builder just to tell the GUI which columns to draw.
 
 ## Install / environment
 
@@ -113,13 +120,13 @@ Then open:
 Register a new indicator through the registry contract:
 
 ```python
-from imaginary_hub.indicators.base import IndicatorParam, register_indicator
+from imaginary_hub.indicators.base import IndicatorParam, TraceSpec, register_indicator
 
 
 def my_indicator(df, params):
     out = df.copy()
     window = int(params.get("window", 10))
-    out["MY_ALPHA"] = out["close"].rolling(window).mean()
+    out[f"MY_ALPHA_{window}"] = out["close"].rolling(window).mean()
     return out
 
 register_indicator(
@@ -128,6 +135,16 @@ register_indicator(
     default_params={"window": 10},
     params_schema=[
         IndicatorParam(key="window", label="Window", type="int", default=10, min=1, max=300, step=1),
+    ],
+    traces=[
+        TraceSpec(
+            kind="line",
+            panel="overlay",
+            column_template="MY_ALPHA_{window}",
+            label_template="MyAlpha {window}",
+            color="#22c55e",
+            width=1.8,
+        )
     ],
     fn=my_indicator,
 )

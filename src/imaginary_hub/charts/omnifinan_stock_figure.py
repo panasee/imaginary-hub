@@ -6,7 +6,7 @@ import pandas as pd
 
 from omnifinan.visualize import StockFigure
 
-from imaginary_hub.indicators.base import registry
+from imaginary_hub.indicators.base import TraceSpec, registry, resolve_template
 from imaginary_hub.indicators.builtin import register_builtins
 
 
@@ -25,6 +25,44 @@ def infer_market(provider: str, ticker: str) -> str:
     return "US"
 
 
+def _add_line_trace(sf: StockFigure, enriched: pd.DataFrame, trace: TraceSpec, params: dict, position: int) -> None:
+    column = resolve_template(trace.column_template, params)
+    if column not in enriched.columns:
+        return
+    label = resolve_template(trace.label_template or column, params)
+    sf.add_scatter_trace(
+        0,
+        0,
+        label=label,
+        position=position,
+        y_arr=pd.to_numeric(enriched[column], errors="coerce"),
+        plot_spec={
+            "line": {
+                "color": trace.color or "#60a5fa",
+                "width": trace.width,
+                "dash": trace.dash,
+            },
+            "opacity": trace.opacity,
+        },
+    )
+
+
+def _add_histogram_trace(sf: StockFigure, enriched: pd.DataFrame, trace: TraceSpec, params: dict, position: int) -> None:
+    column = resolve_template(trace.column_template, params)
+    if column not in enriched.columns:
+        return
+    label = resolve_template(trace.label_template or column, params)
+    sf.fig.add_bar(
+        x=enriched.index,
+        y=pd.to_numeric(enriched[column], errors="coerce"),
+        name=label,
+        marker={"color": trace.color or "#94a3b8"},
+        opacity=trace.opacity,
+        row=position + 1,
+        col=1,
+    )
+
+
 def build_stock_figure(
     df: pd.DataFrame,
     ticker: str,
@@ -39,94 +77,29 @@ def build_stock_figure(
     custom_params = custom_params or {}
 
     market = infer_market(provider, ticker)
-    sf = StockFigure(1, 1, 2, width=width, height=height)
+    oscillator_count = sum(1 for name in selected_indicators if registry.get(name).panel == "oscillator")
+    total_rows = max(2, 1 + oscillator_count)
+
+    sf = StockFigure(1, 1, total_rows, width=width, height=height)
     sf.add_candle_trace(0, 0, data_df=df, market=market)
 
     enriched = registry.apply(sf.data_dfs[0, 0].copy(), selected_indicators, custom_params=custom_params)
     sf.data_dfs[0, 0] = enriched
 
-    overlay_colors = [
-        "#60a5fa",
-        "#f59e0b",
-        "#34d399",
-        "#f472b6",
-        "#a78bfa",
-        "#f87171",
-    ]
-
-    overlay_idx = 0
-    oscillator_slot = 1
-
+    oscillator_row = 1
     for name in selected_indicators:
         spec = registry.get(name)
         params = {**spec.default_params, **custom_params.get(name, {})}
+        position = 0 if spec.panel == "overlay" else oscillator_row
 
-        if name == "MA":
-            col = f"MA_{int(params['window'])}"
-            if col in enriched.columns:
-                sf.add_scatter_trace(
-                    0,
-                    0,
-                    label=col,
-                    position=0,
-                    y_arr=pd.to_numeric(enriched[col], errors="coerce"),
-                    plot_spec={"line": {"color": overlay_colors[overlay_idx % len(overlay_colors)], "width": 1.6}},
-                )
-                overlay_idx += 1
-        elif name == "EMA":
-            col = f"EMA_{int(params['window'])}"
-            if col in enriched.columns:
-                sf.add_scatter_trace(
-                    0,
-                    0,
-                    label=col,
-                    position=0,
-                    y_arr=pd.to_numeric(enriched[col], errors="coerce"),
-                    plot_spec={"line": {"color": overlay_colors[overlay_idx % len(overlay_colors)], "width": 1.6, "dash": "dot"}},
-                )
-                overlay_idx += 1
-        elif name == "Bollinger":
-            window = int(params["window"])
-            for col, dash in [
-                (f"BB_MID_{window}", "solid"),
-                (f"BB_UP_{window}", "dash"),
-                (f"BB_DN_{window}", "dash"),
-            ]:
-                if col in enriched.columns:
-                    sf.add_scatter_trace(
-                        0,
-                        0,
-                        label=col,
-                        position=0,
-                        y_arr=pd.to_numeric(enriched[col], errors="coerce"),
-                        plot_spec={"line": {"color": overlay_colors[overlay_idx % len(overlay_colors)], "width": 1.3, "dash": dash}},
-                    )
-            overlay_idx += 1
-        elif name == "RSI":
-            col = f"RSI_{int(params['window'])}"
-            if col in enriched.columns:
-                sf.add_scatter_trace(
-                    0,
-                    0,
-                    label=col,
-                    position=oscillator_slot,
-                    y_arr=pd.to_numeric(enriched[col], errors="coerce"),
-                    plot_spec={"line": {"color": "#f59e0b", "width": 1.8}},
-                )
-        elif name == "MACD":
-            for col, color in [
-                ("MACD_LINE", "#60a5fa"),
-                ("MACD_SIGNAL", "#f59e0b"),
-            ]:
-                if col in enriched.columns:
-                    sf.add_scatter_trace(
-                        0,
-                        0,
-                        label=col,
-                        position=oscillator_slot + 1,
-                        y_arr=pd.to_numeric(enriched[col], errors="coerce"),
-                        plot_spec={"line": {"color": color, "width": 1.6}},
-                    )
+        for trace in spec.traces:
+            if trace.kind == "line":
+                _add_line_trace(sf, enriched, trace, params, position=position)
+            elif trace.kind == "histogram":
+                _add_histogram_trace(sf, enriched, trace, params, position=position)
+
+        if spec.panel == "oscillator":
+            oscillator_row += 1
 
     sf.fig.update_layout(title=f"{ticker} · OmniFinan StockFigure")
     return sf.fig, enriched

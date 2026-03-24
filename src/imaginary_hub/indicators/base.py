@@ -8,6 +8,8 @@ import pandas as pd
 
 IndicatorFn = Callable[[pd.DataFrame, dict], pd.DataFrame]
 ParamType = Literal["int", "float", "bool", "select", "text"]
+TraceKind = Literal["line", "histogram", "marker"]
+TracePanel = Literal["overlay", "oscillator"]
 
 
 @dataclass(frozen=True)
@@ -24,12 +26,26 @@ class IndicatorParam:
 
 
 @dataclass(frozen=True)
+class TraceSpec:
+    kind: TraceKind
+    column_template: str
+    panel: TracePanel = "overlay"
+    label_template: str | None = None
+    color: str | None = None
+    width: float = 1.6
+    dash: str = "solid"
+    opacity: float = 1.0
+    fill_to_next_y: bool = False
+
+
+@dataclass(frozen=True)
 class IndicatorSpec:
     name: str
-    panel: str = "overlay"  # overlay | oscillator | separate
+    panel: str = "overlay"
     default_params: dict = field(default_factory=dict)
     params_schema: list[IndicatorParam] = field(default_factory=list)
     fn: IndicatorFn | None = None
+    traces: list[TraceSpec] = field(default_factory=list)
 
 
 class IndicatorRegistry:
@@ -72,12 +88,17 @@ class IndicatorRegistry:
 registry = IndicatorRegistry()
 
 
+def resolve_template(template: str, params: dict) -> str:
+    return template.format(**params)
+
+
 def register_indicator(
     name: str,
     panel: str,
     default_params: dict,
     fn: IndicatorFn,
     params_schema: list[IndicatorParam] | None = None,
+    traces: list[TraceSpec] | None = None,
 ) -> None:
     registry.register(
         IndicatorSpec(
@@ -86,5 +107,6 @@ def register_indicator(
             default_params=default_params,
             params_schema=params_schema or [],
             fn=fn,
+            traces=traces or [],
         )
     )
