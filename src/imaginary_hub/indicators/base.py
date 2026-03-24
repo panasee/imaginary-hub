@@ -10,6 +10,7 @@ IndicatorFn = Callable[[pd.DataFrame, dict], pd.DataFrame]
 ParamType = Literal["int", "float", "bool", "select", "text"]
 TraceKind = Literal["line", "histogram", "marker"]
 TracePanel = Literal["overlay", "oscillator"]
+MarkerAnchor = Literal["close", "open", "high", "low", "column", "zero"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,13 @@ class TraceSpec:
     dash: str = "solid"
     opacity: float = 1.0
     fill_to_next_y: bool = False
+    marker_symbol: str = "circle"
+    marker_size: int = 9
+    anchor: MarkerAnchor = "close"
+    y_column_template: str | None = None
+    y_offset_ratio: float = 0.0
+    truthy_only: bool = True
+    text_template: str | None = None
 
 
 @dataclass(frozen=True)

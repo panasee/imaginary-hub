@@ -65,7 +65,12 @@ So the extension contract is now:
 indicator = compute schema + UI schema + trace schema
 ```
 
-That means a new indicator no longer requires editing the chart builder just to tell the GUI which columns to draw.
+Supported trace kinds currently include:
+- **line**
+- **histogram**
+- **marker**
+
+That means a new indicator no longer requires editing the chart builder just to tell the GUI which columns to draw, including signal markers such as **buy/sell points**, **crossovers**, and other event annotations.
 
 ## Install / environment
 
@@ -127,6 +132,7 @@ def my_indicator(df, params):
     out = df.copy()
     window = int(params.get("window", 10))
     out[f"MY_ALPHA_{window}"] = out["close"].rolling(window).mean()
+    out[f"MY_ALPHA_BUY_{window}"] = (out["close"] > out[f"MY_ALPHA_{window}"]).astype(int)
     return out
 
 register_indicator(
@@ -144,7 +150,19 @@ register_indicator(
             label_template="MyAlpha {window}",
             color="#22c55e",
             width=1.8,
-        )
+        ),
+        TraceSpec(
+            kind="marker",
+            panel="overlay",
+            column_template="MY_ALPHA_BUY_{window}",
+            label_template="MyAlpha Buy {window}",
+            color="#10b981",
+            marker_symbol="triangle-up",
+            marker_size=11,
+            anchor="low",
+            y_offset_ratio=-0.015,
+            text_template="BUY {window}",
+        ),
     ],
     fn=my_indicator,
 )

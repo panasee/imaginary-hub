@@ -10,6 +10,14 @@ def _ensure_close(df: pd.DataFrame) -> pd.Series:
     return pd.to_numeric(df["close"], errors="coerce")
 
 
+def _ensure_high(df: pd.DataFrame) -> pd.Series:
+    return pd.to_numeric(df["high"], errors="coerce")
+
+
+def _ensure_low(df: pd.DataFrame) -> pd.Series:
+    return pd.to_numeric(df["low"], errors="coerce")
+
+
 def ma(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     out = df.copy()
     window = int(params.get("window", 20))
@@ -63,6 +71,38 @@ def macd(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     out[f"MACD_LINE_{fast}_{slow}_{signal}"] = macd_line
     out[f"MACD_SIGNAL_{fast}_{slow}_{signal}"] = signal_line
     out[f"MACD_HIST_{fast}_{slow}_{signal}"] = hist
+    return out
+
+
+def ma_cross_signal(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    out = df.copy()
+    fast = int(params.get("fast", 10))
+    slow = int(params.get("slow", 30))
+    close = _ensure_close(out)
+    fast_ma = close.rolling(fast).mean()
+    slow_ma = close.rolling(slow).mean()
+    spread = fast_ma - slow_ma
+    prev_spread = spread.shift(1)
+
+    out[f"XOVER_FAST_{fast}_{slow}"] = fast_ma
+    out[f"XOVER_SLOW_{fast}_{slow}"] = slow_ma
+    out[f"XOVER_BUY_{fast}_{slow}"] = ((spread > 0) & (prev_spread <= 0)).fillna(False).astype(int)
+    out[f"XOVER_SELL_{fast}_{slow}"] = ((spread < 0) & (prev_spread >= 0)).fillna(False).astype(int)
+    return out
+
+
+def breakout_signal(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    out = df.copy()
+    window = int(params.get("window", 20))
+    close = _ensure_close(out)
+    high = _ensure_high(out)
+    low = _ensure_low(out)
+    rolling_high = high.shift(1).rolling(window).max()
+    rolling_low = low.shift(1).rolling(window).min()
+    out[f"BREAKOUT_HIGH_{window}"] = rolling_high
+    out[f"BREAKOUT_LOW_{window}"] = rolling_low
+    out[f"BREAKOUT_BUY_{window}"] = ((close > rolling_high) & rolling_high.notna()).fillna(False).astype(int)
+    out[f"BREAKOUT_SELL_{window}"] = ((close < rolling_low) & rolling_low.notna()).fillna(False).astype(int)
     return out
 
 
@@ -198,6 +238,111 @@ def register_builtins() -> None:
                 ),
             ],
             macd,
+        ),
+        (
+            "MA Cross Signal",
+            "overlay",
+            {"fast": 10, "slow": 30},
+            [
+                IndicatorParam(key="fast", label="Fast MA", type="int", default=10, min=1, max=200, step=1),
+                IndicatorParam(key="slow", label="Slow MA", type="int", default=30, min=2, max=400, step=1),
+            ],
+            [
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="XOVER_FAST_{fast}_{slow}",
+                    label_template="Fast MA {fast}",
+                    color="#38bdf8",
+                    width=1.3,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="XOVER_SLOW_{fast}_{slow}",
+                    label_template="Slow MA {slow}",
+                    color="#f97316",
+                    width=1.3,
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="XOVER_BUY_{fast}_{slow}",
+                    label_template="MA Cross Buy {fast}/{slow}",
+                    color="#22c55e",
+                    marker_symbol="triangle-up",
+                    marker_size=12,
+                    anchor="low",
+                    y_offset_ratio=-0.015,
+                    text_template="BUY {fast}/{slow}",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="XOVER_SELL_{fast}_{slow}",
+                    label_template="MA Cross Sell {fast}/{slow}",
+                    color="#ef4444",
+                    marker_symbol="triangle-down",
+                    marker_size=12,
+                    anchor="high",
+                    y_offset_ratio=0.015,
+                    text_template="SELL {fast}/{slow}",
+                ),
+            ],
+            ma_cross_signal,
+        ),
+        (
+            "Breakout Signal",
+            "overlay",
+            {"window": 20},
+            [IndicatorParam(key="window", label="Lookback", type="int", default=20, min=2, max=300, step=1)],
+            [
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="BREAKOUT_HIGH_{window}",
+                    label_template="Breakout High {window}",
+                    color="#14b8a6",
+                    width=1.1,
+                    dash="dot",
+                    opacity=0.75,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="BREAKOUT_LOW_{window}",
+                    label_template="Breakout Low {window}",
+                    color="#f43f5e",
+                    width=1.1,
+                    dash="dot",
+                    opacity=0.75,
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="BREAKOUT_BUY_{window}",
+                    label_template="Breakout Buy {window}",
+                    color="#10b981",
+                    marker_symbol="star",
+                    marker_size=13,
+                    anchor="high",
+                    y_offset_ratio=0.02,
+                    text_template="BO↑ {window}",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="BREAKOUT_SELL_{window}",
+                    label_template="Breakout Sell {window}",
+                    color="#e11d48",
+                    marker_symbol="x",
+                    marker_size=11,
+                    anchor="low",
+                    y_offset_ratio=-0.02,
+                    text_template="BO↓ {window}",
+                ),
+            ],
+            breakout_signal,
         ),
     ]
     for name, panel, default_params, params_schema, traces, fn in specs:
