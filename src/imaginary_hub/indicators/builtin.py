@@ -1,109 +1,15 @@
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-
 from .base import IndicatorParam, TraceSpec, register_indicator, registry
+from .engine import Indicators
 
 
-def _ensure_close(df: pd.DataFrame) -> pd.Series:
-    return pd.to_numeric(df["close"], errors="coerce")
+def _wrap(method_name: str):
+    def _fn(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+        method = getattr(Indicators, method_name)
+        return method(df, **params)
 
-
-def _ensure_high(df: pd.DataFrame) -> pd.Series:
-    return pd.to_numeric(df["high"], errors="coerce")
-
-
-def _ensure_low(df: pd.DataFrame) -> pd.Series:
-    return pd.to_numeric(df["low"], errors="coerce")
-
-
-def ma(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    window = int(params.get("window", 20))
-    out[f"MA_{window}"] = _ensure_close(out).rolling(window).mean()
-    return out
-
-
-def ema(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    window = int(params.get("window", 20))
-    out[f"EMA_{window}"] = _ensure_close(out).ewm(span=window, adjust=False).mean()
-    return out
-
-
-def bollinger(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    window = int(params.get("window", 20))
-    num_std = float(params.get("num_std", 2.0))
-    close = _ensure_close(out)
-    mid = close.rolling(window).mean()
-    std = close.rolling(window).std(ddof=0)
-    out[f"BB_MID_{window}"] = mid
-    out[f"BB_UP_{window}"] = mid + num_std * std
-    out[f"BB_DN_{window}"] = mid - num_std * std
-    return out
-
-
-def rsi(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    window = int(params.get("window", 14))
-    close = _ensure_close(out)
-    delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = (-delta).clip(lower=0)
-    avg_gain = gain.ewm(alpha=1 / window, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / window, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    out[f"RSI_{window}"] = (100 - 100 / (1 + rs)).fillna(50)
-    return out
-
-
-def macd(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    close = _ensure_close(out)
-    fast = int(params.get("fast", 12))
-    slow = int(params.get("slow", 26))
-    signal = int(params.get("signal", 9))
-    macd_line = close.ewm(span=fast, adjust=False).mean() - close.ewm(span=slow, adjust=False).mean()
-    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
-    hist = macd_line - signal_line
-    out[f"MACD_LINE_{fast}_{slow}_{signal}"] = macd_line
-    out[f"MACD_SIGNAL_{fast}_{slow}_{signal}"] = signal_line
-    out[f"MACD_HIST_{fast}_{slow}_{signal}"] = hist
-    return out
-
-
-def ma_cross_signal(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    fast = int(params.get("fast", 10))
-    slow = int(params.get("slow", 30))
-    close = _ensure_close(out)
-    fast_ma = close.rolling(fast).mean()
-    slow_ma = close.rolling(slow).mean()
-    spread = fast_ma - slow_ma
-    prev_spread = spread.shift(1)
-
-    out[f"XOVER_FAST_{fast}_{slow}"] = fast_ma
-    out[f"XOVER_SLOW_{fast}_{slow}"] = slow_ma
-    out[f"XOVER_BUY_{fast}_{slow}"] = ((spread > 0) & (prev_spread <= 0)).fillna(False).astype(int)
-    out[f"XOVER_SELL_{fast}_{slow}"] = ((spread < 0) & (prev_spread >= 0)).fillna(False).astype(int)
-    return out
-
-
-def breakout_signal(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    out = df.copy()
-    window = int(params.get("window", 20))
-    close = _ensure_close(out)
-    high = _ensure_high(out)
-    low = _ensure_low(out)
-    rolling_high = high.shift(1).rolling(window).max()
-    rolling_low = low.shift(1).rolling(window).min()
-    out[f"BREAKOUT_HIGH_{window}"] = rolling_high
-    out[f"BREAKOUT_LOW_{window}"] = rolling_low
-    out[f"BREAKOUT_BUY_{window}"] = ((close > rolling_high) & rolling_high.notna()).fillna(False).astype(int)
-    out[f"BREAKOUT_SELL_{window}"] = ((close < rolling_low) & rolling_low.notna()).fillna(False).astype(int)
-    return out
+    return _fn
 
 
 def register_builtins() -> None:
@@ -111,6 +17,7 @@ def register_builtins() -> None:
     specs = [
         (
             "MA",
+            "ma",
             "overlay",
             {"window": 20},
             [IndicatorParam(key="window", label="Window", type="int", default=20, min=1, max=400, step=1)],
@@ -124,10 +31,11 @@ def register_builtins() -> None:
                     width=1.6,
                 )
             ],
-            ma,
+            _wrap("ma"),
         ),
         (
             "EMA",
+            "ema",
             "overlay",
             {"window": 20},
             [IndicatorParam(key="window", label="Window", type="int", default=20, min=1, max=400, step=1)],
@@ -142,10 +50,11 @@ def register_builtins() -> None:
                     dash="dot",
                 )
             ],
-            ema,
+            _wrap("ema"),
         ),
         (
             "Bollinger",
+            "bollinger",
             "overlay",
             {"window": 20, "num_std": 2.0},
             [
@@ -182,10 +91,11 @@ def register_builtins() -> None:
                     opacity=0.8,
                 ),
             ],
-            bollinger,
+            _wrap("bollinger"),
         ),
         (
             "RSI",
+            "rsi",
             "oscillator",
             {"window": 14},
             [IndicatorParam(key="window", label="Window", type="int", default=14, min=1, max=200, step=1)],
@@ -199,10 +109,11 @@ def register_builtins() -> None:
                     width=1.8,
                 )
             ],
-            rsi,
+            _wrap("rsi"),
         ),
         (
             "MACD",
+            "macd",
             "oscillator",
             {"fast": 12, "slow": 26, "signal": 9},
             [
@@ -237,10 +148,11 @@ def register_builtins() -> None:
                     opacity=0.5,
                 ),
             ],
-            macd,
+            _wrap("macd"),
         ),
         (
             "MA Cross Signal",
+            "ma_cross_signal",
             "overlay",
             {"fast": 10, "slow": 30},
             [
@@ -289,10 +201,11 @@ def register_builtins() -> None:
                     text_template="SELL {fast}/{slow}",
                 ),
             ],
-            ma_cross_signal,
+            _wrap("ma_cross_signal"),
         ),
         (
             "Breakout Signal",
+            "breakout_signal",
             "overlay",
             {"window": 20},
             [IndicatorParam(key="window", label="Lookback", type="int", default=20, min=2, max=300, step=1)],
@@ -342,9 +255,9 @@ def register_builtins() -> None:
                     text_template="BO↓ {window}",
                 ),
             ],
-            breakout_signal,
+            _wrap("breakout_signal"),
         ),
     ]
-    for name, panel, default_params, params_schema, traces, fn in specs:
+    for name, method_name, panel, default_params, params_schema, traces, fn in specs:
         if name not in existing:
-            register_indicator(name, panel, default_params, fn, params_schema=params_schema, traces=traces)
+            register_indicator(name, method_name, panel, default_params, fn, params_schema=params_schema, traces=traces)

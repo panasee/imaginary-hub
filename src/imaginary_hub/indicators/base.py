@@ -49,6 +49,7 @@ class TraceSpec:
 @dataclass(frozen=True)
 class IndicatorSpec:
     name: str
+    method_name: str
     panel: str = "overlay"
     default_params: dict = field(default_factory=dict)
     params_schema: list[IndicatorParam] = field(default_factory=list)
@@ -84,14 +85,6 @@ class IndicatorRegistry:
             built[name] = {**spec.default_params, **overrides.get(name, {})}
         return built
 
-    def apply(self, df: pd.DataFrame, selected: list[str], custom_params: dict[str, dict] | None = None) -> pd.DataFrame:
-        out = df.copy()
-        params_map = self.build_params(selected, overrides=custom_params)
-        for name in selected:
-            spec = self.get(name)
-            out = spec.fn(out, params_map[name])
-        return out
-
 
 registry = IndicatorRegistry()
 
@@ -102,6 +95,7 @@ def resolve_template(template: str, params: dict) -> str:
 
 def register_indicator(
     name: str,
+    method_name: str,
     panel: str,
     default_params: dict,
     fn: IndicatorFn,
@@ -111,6 +105,7 @@ def register_indicator(
     registry.register(
         IndicatorSpec(
             name=name,
+            method_name=method_name,
             panel=panel,
             default_params=default_params,
             params_schema=params_schema or [],

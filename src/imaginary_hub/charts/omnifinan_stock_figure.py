@@ -8,6 +8,7 @@ from omnifinan.visualize import StockFigure
 
 from imaginary_hub.indicators.base import TraceSpec, registry, resolve_template
 from imaginary_hub.indicators.builtin import register_builtins
+from imaginary_hub.indicators.engine import compute_indicators
 
 
 MARKET_MAP = {
@@ -152,7 +153,14 @@ def build_stock_figure(
     sf = StockFigure(1, 1, total_rows, width=width, height=height)
     sf.add_candle_trace(0, 0, data_df=df, market=market)
 
-    enriched = registry.apply(sf.data_dfs[0, 0].copy(), selected_indicators, custom_params=custom_params)
+    requests = [
+        {
+            "name": registry.get(name).method_name,
+            "params": {**registry.get(name).default_params, **custom_params.get(name, {})},
+        }
+        for name in selected_indicators
+    ]
+    enriched = compute_indicators(sf.data_dfs[0, 0].copy(), requests)
     sf.data_dfs[0, 0] = enriched
 
     oscillator_row = 1
