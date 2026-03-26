@@ -43,7 +43,8 @@ A Dash version is still kept as a backup entry point, but the **Streamlit app is
 - **`src/imaginary_hub/apps/tv_like_app.py`**: legacy/backup Dash entry
 - **`src/imaginary_hub/data/omnifinan_adapter.py`**: OmniFinan OHLCV adapter + normalization
 - **`src/imaginary_hub/indicators/base.py`**: indicator registry + parameter schema contract
-- **`src/imaginary_hub/indicators/builtin.py`**: built-in example indicators
+- **`src/imaginary_hub/indicators/builtin.py`**: built-in example indicators + metadata registration
+- **`src/imaginary_hub/indicators/engine.py`**: class-based indicator compute engine; each indicator method returns only newly computed columns
 - **`src/imaginary_hub/charts/omnifinan_stock_figure.py`**: OmniFinan `StockFigure` adapter for GUI rendering
 - **`src/imaginary_hub/charts/plotly_tv.py`**: legacy fallback renderer, no longer the preferred path
 - **`src/imaginary_hub/config/theme.py`**: TradingView-like dark palette
@@ -54,17 +55,22 @@ The indicator system is now **schema-driven**, so the GUI does not hardcode MA/R
 
 Each indicator can declare:
 - **name**
+- **method name**
 - **panel**
 - **default params**
 - **parameter schema**
-- **calculation function**
 - **trace schema**
 
-So the extension contract is now:
+The compute path is now split cleanly:
 
 ```text
-indicator = compute schema + UI schema + trace schema
+indicator = class method compute + UI schema + trace schema
 ```
+
+Concretely:
+- **`Indicators.some_indicator(df, ...) -> DataFrame`** computes only the extra columns for that indicator
+- **`register_indicator(...)`** binds the display name to the method name, params schema, and trace schema
+- the chart builder computes all selected indicators, concatenates the returned DataFrames by index, and then renders from the trace specs
 
 Supported trace kinds currently include:
 - **line**
@@ -123,21 +129,39 @@ Then open:
 
 ## Add a custom indicator
 
-Register a new indicator through the registry contract:
+Add a new method to **`src/imaginary_hub/indicators/engine.py`** and then register its metadata in **`src/imaginary_hub/indicators/builtin.py`**.
+
+### Step 1: implement the compute method
+
+```python
+import pandas as pd
+
+
+class Indicators:
+    @staticmethod
+    def my_alpha(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        out = pd.DataFrame(index=df.index)
+        close = pd.to_numeric(df["close"], errors="coerce")
+        out[f"MY_ALPHA_{window}"] = close.rolling(window).mean()
+        out[f"MY_ALPHA_BUY_{window}"] = (close > out[f"MY_ALPHA_{window}"]).fillna(False).astype(int)
+        return out
+```
+
+Rules:
+- the first argument must be **`df`**
+- extra parameter names and counts are **fully user-definable**
+- the method must return a **DataFrame** indexed like the input
+- return only the new indicator columns, not a full OHLCV copy
+
+### Step 2: register the indicator metadata
 
 ```python
 from imaginary_hub.indicators.base import IndicatorParam, TraceSpec, register_indicator
-
-
-def my_indicator(df, params):
-    out = df.copy()
-    window = int(params.get("window", 10))
-    out[f"MY_ALPHA_{window}"] = out["close"].rolling(window).mean()
-    out[f"MY_ALPHA_BUY_{window}"] = (out["close"] > out[f"MY_ALPHA_{window}"]).astype(int)
-    return out
+from imaginary_hub.indicators.builtin import _wrap
 
 register_indicator(
     name="MyAlpha",
+    method_name="my_alpha",
     panel="overlay",
     default_params={"window": 10},
     params_schema=[
@@ -165,11 +189,16 @@ register_indicator(
             text_template="BUY {window}",
         ),
     ],
-    fn=my_indicator,
+    fn=_wrap("my_alpha"),
 )
 ```
 
-The Streamlit sidebar will render parameter widgets from the schema, and the selected outputs are then drawn through the OmniFinan chart object.
+Parameter names must stay consistent across three places:
+- the method signature in **`engine.py`**
+- **`default_params`** / **`params_schema`**
+- any placeholders used by **`column_template`**, **`label_template`**, and **`text_template`**
+
+The Streamlit sidebar renders parameter widgets from the schema, then the app computes all selected indicator DataFrames, concatenates them by index, and renders the declared traces through the OmniFinan chart object.
 
 ## Notes / limitations
 
