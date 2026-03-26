@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pandas as pd
+
 from .base import IndicatorParam, TraceSpec, register_indicator, registry
 from .engine import Indicators
 
@@ -12,9 +14,141 @@ def _wrap(method_name: str):
     return _fn
 
 
-def register_builtins() -> None:
+def register_builtins(include_legacy_hidden: bool = True) -> None:
     existing = set(registry.names())
-    specs = [
+    visible_specs = [
+        (
+            "Futu Reference Channel",
+            "futu_reference_channel",
+            "overlay",
+            {},
+            [],
+            [
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_MA10",
+                    label_template="MA10",
+                    color="#ff0000",
+                    width=2.0,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_MA5",
+                    label_template="MA5",
+                    color="#ffaec9",
+                    width=1.2,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_MA200",
+                    label_template="MA200",
+                    color="#13ffff",
+                    width=2.4,
+                    dash="dot",
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_TOP_LONG",
+                    label_template="TOP_LONG",
+                    color="#22c55e",
+                    width=1.3,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_BOT_LONG",
+                    label_template="BOT_LONG",
+                    color="#22c55e",
+                    width=1.3,
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_TOP_SHORT",
+                    label_template="TOP_SHORT",
+                    color="#ffffff",
+                    width=1.1,
+                    dash="dot",
+                ),
+                TraceSpec(
+                    kind="line",
+                    panel="overlay",
+                    column_template="FUTU_BOT_SHORT",
+                    label_template="BOT_SHORT",
+                    color="#ffffff",
+                    width=1.1,
+                    dash="dot",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="FUTU_STOP_FALL",
+                    label_template="止跌",
+                    color="#facc15",
+                    marker_symbol="diamond",
+                    marker_size=11,
+                    anchor="low",
+                    y_offset_ratio=-0.015,
+                    text_template="止跌",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="FUTU_CAREFUL",
+                    label_template="强",
+                    color="#ef4444",
+                    marker_symbol="triangle-up",
+                    marker_size=11,
+                    anchor="high",
+                    y_offset_ratio=0.015,
+                    text_template="强",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="FUTU_CAREFUL2",
+                    label_template="弱",
+                    color="#a855f7",
+                    marker_symbol="triangle-down",
+                    marker_size=11,
+                    anchor="low",
+                    y_offset_ratio=-0.015,
+                    text_template="弱",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="FUTU_SIGNAL_B",
+                    label_template="B",
+                    color="#22c55e",
+                    marker_symbol="circle",
+                    marker_size=12,
+                    anchor="low",
+                    y_offset_ratio=-0.02,
+                    text_template="B",
+                ),
+                TraceSpec(
+                    kind="marker",
+                    panel="overlay",
+                    column_template="FUTU_SIGNAL_S",
+                    label_template="S",
+                    color="#ef4444",
+                    marker_symbol="circle",
+                    marker_size=12,
+                    anchor="high",
+                    y_offset_ratio=0.02,
+                    text_template="S",
+                ),
+            ],
+            _wrap("futu_reference_channel"),
+        ),
+    ]
+
+    legacy_specs = [
         (
             "MA",
             "ma",
@@ -62,34 +196,9 @@ def register_builtins() -> None:
                 IndicatorParam(key="num_std", label="Std Dev", type="float", default=2.0, min=0.1, max=10.0, step=0.1),
             ],
             [
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="BB_MID_{window}",
-                    label_template="BB Mid {window}",
-                    color="#34d399",
-                    width=1.3,
-                ),
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="BB_UP_{window}",
-                    label_template="BB Up {window}",
-                    color="#34d399",
-                    width=1.1,
-                    dash="dash",
-                    opacity=0.8,
-                ),
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="BB_DN_{window}",
-                    label_template="BB Dn {window}",
-                    color="#34d399",
-                    width=1.1,
-                    dash="dash",
-                    opacity=0.8,
-                ),
+                TraceSpec(kind="line", panel="overlay", column_template="BB_MID_{window}", label_template="BB Mid {window}", color="#34d399", width=1.3),
+                TraceSpec(kind="line", panel="overlay", column_template="BB_UP_{window}", label_template="BB Up {window}", color="#34d399", width=1.1, dash="dash", opacity=0.8),
+                TraceSpec(kind="line", panel="overlay", column_template="BB_DN_{window}", label_template="BB Dn {window}", color="#34d399", width=1.1, dash="dash", opacity=0.8),
             ],
             _wrap("bollinger"),
         ),
@@ -99,16 +208,7 @@ def register_builtins() -> None:
             "oscillator",
             {"window": 14},
             [IndicatorParam(key="window", label="Window", type="int", default=14, min=1, max=200, step=1)],
-            [
-                TraceSpec(
-                    kind="line",
-                    panel="oscillator",
-                    column_template="RSI_{window}",
-                    label_template="RSI {window}",
-                    color="#a78bfa",
-                    width=1.8,
-                )
-            ],
+            [TraceSpec(kind="line", panel="oscillator", column_template="RSI_{window}", label_template="RSI {window}", color="#a78bfa", width=1.8)],
             _wrap("rsi"),
         ),
         (
@@ -122,31 +222,9 @@ def register_builtins() -> None:
                 IndicatorParam(key="signal", label="Signal", type="int", default=9, min=1, max=200, step=1),
             ],
             [
-                TraceSpec(
-                    kind="line",
-                    panel="oscillator",
-                    column_template="MACD_LINE_{fast}_{slow}_{signal}",
-                    label_template="MACD Line {fast}/{slow}/{signal}",
-                    color="#60a5fa",
-                    width=1.6,
-                ),
-                TraceSpec(
-                    kind="line",
-                    panel="oscillator",
-                    column_template="MACD_SIGNAL_{fast}_{slow}_{signal}",
-                    label_template="MACD Signal {fast}/{slow}/{signal}",
-                    color="#f59e0b",
-                    width=1.6,
-                ),
-                TraceSpec(
-                    kind="histogram",
-                    panel="oscillator",
-                    column_template="MACD_HIST_{fast}_{slow}_{signal}",
-                    label_template="MACD Hist {fast}/{slow}/{signal}",
-                    color="#94a3b8",
-                    width=1.0,
-                    opacity=0.5,
-                ),
+                TraceSpec(kind="line", panel="oscillator", column_template="MACD_LINE_{fast}_{slow}_{signal}", label_template="MACD Line {fast}/{slow}/{signal}", color="#60a5fa", width=1.6),
+                TraceSpec(kind="line", panel="oscillator", column_template="MACD_SIGNAL_{fast}_{slow}_{signal}", label_template="MACD Signal {fast}/{slow}/{signal}", color="#f59e0b", width=1.6),
+                TraceSpec(kind="histogram", panel="oscillator", column_template="MACD_HIST_{fast}_{slow}_{signal}", label_template="MACD Hist {fast}/{slow}/{signal}", color="#94a3b8", width=1.0, opacity=0.5),
             ],
             _wrap("macd"),
         ),
@@ -160,46 +238,10 @@ def register_builtins() -> None:
                 IndicatorParam(key="slow", label="Slow MA", type="int", default=30, min=2, max=400, step=1),
             ],
             [
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="XOVER_FAST_{fast}_{slow}",
-                    label_template="Fast MA {fast}",
-                    color="#38bdf8",
-                    width=1.3,
-                ),
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="XOVER_SLOW_{fast}_{slow}",
-                    label_template="Slow MA {slow}",
-                    color="#f97316",
-                    width=1.3,
-                ),
-                TraceSpec(
-                    kind="marker",
-                    panel="overlay",
-                    column_template="XOVER_BUY_{fast}_{slow}",
-                    label_template="MA Cross Buy {fast}/{slow}",
-                    color="#22c55e",
-                    marker_symbol="triangle-up",
-                    marker_size=12,
-                    anchor="low",
-                    y_offset_ratio=-0.015,
-                    text_template="BUY {fast}/{slow}",
-                ),
-                TraceSpec(
-                    kind="marker",
-                    panel="overlay",
-                    column_template="XOVER_SELL_{fast}_{slow}",
-                    label_template="MA Cross Sell {fast}/{slow}",
-                    color="#ef4444",
-                    marker_symbol="triangle-down",
-                    marker_size=12,
-                    anchor="high",
-                    y_offset_ratio=0.015,
-                    text_template="SELL {fast}/{slow}",
-                ),
+                TraceSpec(kind="line", panel="overlay", column_template="XOVER_FAST_{fast}_{slow}", label_template="Fast MA {fast}", color="#38bdf8", width=1.3),
+                TraceSpec(kind="line", panel="overlay", column_template="XOVER_SLOW_{fast}_{slow}", label_template="Slow MA {slow}", color="#f97316", width=1.3),
+                TraceSpec(kind="marker", panel="overlay", column_template="XOVER_BUY_{fast}_{slow}", label_template="MA Cross Buy {fast}/{slow}", color="#22c55e", marker_symbol="triangle-up", marker_size=12, anchor="low", y_offset_ratio=-0.015, text_template="BUY {fast}/{slow}"),
+                TraceSpec(kind="marker", panel="overlay", column_template="XOVER_SELL_{fast}_{slow}", label_template="MA Cross Sell {fast}/{slow}", color="#ef4444", marker_symbol="triangle-down", marker_size=12, anchor="high", y_offset_ratio=0.015, text_template="SELL {fast}/{slow}"),
             ],
             _wrap("ma_cross_signal"),
         ),
@@ -210,54 +252,20 @@ def register_builtins() -> None:
             {"window": 20},
             [IndicatorParam(key="window", label="Lookback", type="int", default=20, min=2, max=300, step=1)],
             [
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="BREAKOUT_HIGH_{window}",
-                    label_template="Breakout High {window}",
-                    color="#14b8a6",
-                    width=1.1,
-                    dash="dot",
-                    opacity=0.75,
-                ),
-                TraceSpec(
-                    kind="line",
-                    panel="overlay",
-                    column_template="BREAKOUT_LOW_{window}",
-                    label_template="Breakout Low {window}",
-                    color="#f43f5e",
-                    width=1.1,
-                    dash="dot",
-                    opacity=0.75,
-                ),
-                TraceSpec(
-                    kind="marker",
-                    panel="overlay",
-                    column_template="BREAKOUT_BUY_{window}",
-                    label_template="Breakout Buy {window}",
-                    color="#10b981",
-                    marker_symbol="star",
-                    marker_size=13,
-                    anchor="high",
-                    y_offset_ratio=0.02,
-                    text_template="BO↑ {window}",
-                ),
-                TraceSpec(
-                    kind="marker",
-                    panel="overlay",
-                    column_template="BREAKOUT_SELL_{window}",
-                    label_template="Breakout Sell {window}",
-                    color="#e11d48",
-                    marker_symbol="x",
-                    marker_size=11,
-                    anchor="low",
-                    y_offset_ratio=-0.02,
-                    text_template="BO↓ {window}",
-                ),
+                TraceSpec(kind="line", panel="overlay", column_template="BREAKOUT_HIGH_{window}", label_template="Breakout High {window}", color="#14b8a6", width=1.1, dash="dot", opacity=0.75),
+                TraceSpec(kind="line", panel="overlay", column_template="BREAKOUT_LOW_{window}", label_template="Breakout Low {window}", color="#f43f5e", width=1.1, dash="dot", opacity=0.75),
+                TraceSpec(kind="marker", panel="overlay", column_template="BREAKOUT_BUY_{window}", label_template="Breakout Buy {window}", color="#10b981", marker_symbol="star", marker_size=13, anchor="high", y_offset_ratio=0.02, text_template="BO↑ {window}"),
+                TraceSpec(kind="marker", panel="overlay", column_template="BREAKOUT_SELL_{window}", label_template="Breakout Sell {window}", color="#e11d48", marker_symbol="x", marker_size=11, anchor="low", y_offset_ratio=-0.02, text_template="BO↓ {window}"),
             ],
             _wrap("breakout_signal"),
         ),
     ]
+
+    specs = visible_specs + (legacy_specs if include_legacy_hidden else [])
     for name, method_name, panel, default_params, params_schema, traces, fn in specs:
         if name not in existing:
             register_indicator(name, method_name, panel, default_params, fn, params_schema=params_schema, traces=traces)
+
+
+def get_visible_indicator_names() -> list[str]:
+    return ["Futu Reference Channel"]

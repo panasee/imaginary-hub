@@ -18,7 +18,7 @@ from imaginary_hub.data.omnifinan_adapter import (
     fetch_price_df,
 )
 from imaginary_hub.indicators.base import IndicatorParam, registry
-from imaginary_hub.indicators.builtin import register_builtins
+from imaginary_hub.indicators.builtin import get_visible_indicator_names, register_builtins
 
 
 st.set_page_config(page_title="Imaginary Hub TV-like", layout="wide")
@@ -115,11 +115,11 @@ def main() -> None:
         st.caption(f"Price provider: {INTERNAL_PRICE_PROVIDER} (built-in)")
 
         st.subheader("Indicators")
-        indicator_names = registry.names()
+        indicator_names = get_visible_indicator_names()
         selected = st.multiselect(
             "Select indicators",
             options=indicator_names,
-            default=[x for x in ["MA", "EMA", "RSI", "MACD"] if x in indicator_names],
+            default=indicator_names,
         )
 
     custom_params = build_indicator_params(selected)
